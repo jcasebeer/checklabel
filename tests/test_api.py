@@ -220,6 +220,88 @@ def test_batch_missing_key_is_json_503(monkeypatch):
     assert resp.status_code == 503
 
 
+# --- App-level API key ------------------------------------------------------
+class TestApiKey:
+    MANIFEST = json.dumps({"label.png": {"brand": "X"}})
+
+    @pytest.fixture(autouse=True)
+    def key_configured(self, monkeypatch):
+        monkeypatch.setattr(config, "API_KEY", "sekret-key")
+
+    def test_batch_without_key_is_401(self, client, stub_verify):
+        resp = client.post("/batch", data={"manifest": self.MANIFEST}, files=[upload()])
+        assert resp.status_code == 401
+        assert stub_verify == []
+
+    def test_batch_with_bearer_key_works(self, client, stub_verify):
+        resp = client.post("/batch", data={"manifest": self.MANIFEST}, files=[upload()],
+                           headers={"Authorization": "Bearer sekret-key"})
+        assert resp.status_code == 200
+
+    def test_batch_with_x_api_key_works(self, client, stub_verify):
+        resp = client.post("/batch", data={"manifest": self.MANIFEST}, files=[upload()],
+                           headers={"X-API-Key": "sekret-key"})
+        assert resp.status_code == 200
+
+    def test_wrong_key_is_401(self, client):
+        resp = client.post("/batch", data={"manifest": self.MANIFEST}, files=[upload()],
+                           headers={"Authorization": "Bearer nope"})
+        assert resp.status_code == 401
+
+    def test_poll_endpoint_also_guarded(self, client):
+        assert client.get("/batch/msgbatch_x").status_code == 401
+
+    def test_ui_check_not_gated_by_api_key(self, client, stub_verify, png_bytes):
+        resp = client.post("/check", data={"brand": "X"},
+                           files={"label": ("l.png", png_bytes, "image/png")})
+        assert resp.status_code == 200
+        assert len(stub_verify) == 1
+
+
+# --- Spend cap ---------------------------------------------------------------
+class TestSpendCap:
+    @pytest.fixture(autouse=True)
+    def fresh_ledger(self, monkeypatch):
+        from app.spend import SpendLedger
+        monkeypatch.setattr(main, "_ledger", SpendLedger())
+
+    def test_batch_over_cap_is_429(self, client, stub_verify, monkeypatch):
+        monkeypatch.setattr(config, "SPEND_CAP_PER_IP_USD", 0.000001)
+        resp = client.post("/batch", data={"manifest": json.dumps({"label.png": {"brand": "X"}})},
+                           files=[upload()])
+        assert resp.status_code == 429
+        assert stub_verify == []
+
+    def test_check_over_cap_shows_fragment(self, client, stub_verify, monkeypatch, png_bytes):
+        monkeypatch.setattr(config, "SPEND_CAP_PER_IP_USD", 0.000001)
+        resp = client.post("/check", data={"brand": "X"},
+                           files={"label": ("l.png", png_bytes, "image/png")})
+        assert resp.status_code == 200
+        assert "used up" in resp.text
+        assert stub_verify == []
+
+    def test_sync_batch_charges_actual_usage(self, client, monkeypatch, png_bytes):
+        # A verify result carrying usage must land in the ledger.
+        from app.verifier import Result
+
+        async def fake_verify(client_, images, brand, abv):
+            r = Result(overall="pass", checks=PASS_RESULT.checks)
+            r.usage = {"input_tokens": 2000, "output_tokens": 300}
+            return r
+
+        monkeypatch.setattr(main, "verify_label", fake_verify)
+        client.post("/batch", data={"manifest": json.dumps({"label.png": {"brand": "X"}})},
+                    files=[upload()])
+        from app.spend import usage_usd
+        expected = usage_usd({"input_tokens": 2000, "output_tokens": 300})
+        assert main._ledger.spent("testclient") == pytest.approx(expected)
+
+    def test_under_cap_requests_pass(self, client, stub_verify):
+        resp = client.post("/batch", data={"manifest": json.dumps({"label.png": {"brand": "X"}})},
+                           files=[upload()])
+        assert resp.status_code == 200
+
+
 # --- /batch (queued via Message Batches API) ----------------------------------------
 class FakeBatches:
     """Stand-in for client.messages.batches covering create/retrieve/results."""

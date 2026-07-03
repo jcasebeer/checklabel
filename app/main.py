@@ -29,6 +29,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import config
 from .images import ImageError, prepare_image
+from .spend import SpendLedger, bucket_for_ip, estimate_usd, usage_usd
 from .verifier import (
     Images,
     Result,
@@ -58,6 +59,12 @@ _MISSING_KEY_MSG = "Server is missing ANTHROPIC_API_KEY. Set it and restart."
 # A restart only loses the expected-value mapping for in-flight batches.
 _QUEUED_BATCHES: dict[str, dict[str, dict]] = {}
 
+# Estimated model spend per client network over a rolling 24h (see app/spend.py).
+_ledger = SpendLedger()
+
+_CAP_MSG = ("This deployment limits model spend per visitor network and yours "
+            "is used up for now. Try again later.")
+
 
 def _key_present() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY"))
@@ -66,6 +73,30 @@ def _key_present() -> bool:
 def _require_key() -> None:
     if not _key_present():
         raise HTTPException(status_code=503, detail=_MISSING_KEY_MSG)
+
+
+def _require_api_key(request: Request) -> None:
+    """Enforce the optional app-level API key on the batch endpoints."""
+    expected = config.API_KEY
+    if not expected:
+        return  # no key configured: endpoint is open
+    auth = request.headers.get("authorization", "")
+    supplied = auth[7:].strip() if auth.lower().startswith("bearer ") else \
+        request.headers.get("x-api-key", "")
+    if supplied != expected:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid API key. Send 'Authorization: Bearer <key>' "
+                   "or 'X-API-Key: <key>'.")
+
+
+def _spend_bucket(request: Request) -> str:
+    # Cloudflare sets CF-Connecting-IP at the edge; behind the tunnel that's
+    # the only hop, and the container is not directly reachable. Fall back to
+    # the (proxy-header-resolved) socket address for local/un-fronted runs.
+    ip = request.headers.get("cf-connecting-ip") or \
+        (request.client.host if request.client else "unknown")
+    return bucket_for_ip(ip)
 
 
 async def _read_limited(upload: UploadFile) -> bytes:
@@ -221,6 +252,9 @@ async def check(
 
     if not _key_present():
         return error_fragment(_MISSING_KEY_MSG)
+    bucket = _spend_bucket(request)
+    if _ledger.would_exceed(bucket, estimate_usd(len(label))):
+        return error_fragment(_CAP_MSG)
     try:
         images = await _prepare_uploads(label)
     except ImageError as exc:
@@ -228,6 +262,7 @@ async def check(
 
     expected_abv = _parse_expected_abv(abv) if abv.strip() else None
     result = await verify_label(_client, images, brand.strip(), expected_abv)
+    _ledger.charge(bucket, usage_usd(result.usage))
     return templates.TemplateResponse(
         request, "partials/result.html", {"result": result}
     )
@@ -235,6 +270,7 @@ async def check(
 
 @app.post("/batch")
 async def batch(
+    request: Request,
     manifest: str = Form(...),
     files: list[UploadFile] = File(...),
     mode: str = Form("sync"),
@@ -254,13 +290,21 @@ async def batch(
     Per-label failures are reported inline and never abort the whole batch.
     """
     _require_key()
+    _require_api_key(request)
     if mode not in ("sync", "queued"):
         raise HTTPException(status_code=400, detail="mode must be 'sync' or 'queued'.")
     spec = _parse_manifest(manifest)
     groups, errors = _build_groups(spec, files)
 
+    # Pre-flight spend check on the whole submission; sync charges actual
+    # usage afterwards, queued charges the estimate at submit time.
+    bucket = _spend_bucket(request)
+    n_images = sum(len(g["uploads"]) for g in groups)
+    if _ledger.would_exceed(bucket, estimate_usd(n_images, batch_pricing=(mode == "queued"))):
+        raise HTTPException(status_code=429, detail=_CAP_MSG)
+
     if mode == "queued":
-        return await _batch_submit(groups, errors)
+        return await _batch_submit(groups, errors, bucket)
 
     sem = asyncio.Semaphore(config.BATCH_CONCURRENCY)
 
@@ -271,17 +315,19 @@ async def batch(
             except ImageError as exc:
                 return _error_entry(group["label"], str(exc))
             r = await verify_label(_client, images, group["brand"], group["abv"])
+            _ledger.charge(bucket, usage_usd(r.usage))
             return {"file": group["label"], "result": _result_dict(r)}
 
     results = list(await asyncio.gather(*(one(g) for g in groups))) + errors
     return JSONResponse({"summary": _summary(results), "results": results})
 
 
-async def _batch_submit(groups: list[dict], errors: list[dict]):
+async def _batch_submit(groups: list[dict], errors: list[dict], bucket: str):
     """Queue one Message Batch for the label groups and remember expected values."""
     requests: list[BatchRequest] = []
     entries: dict[str, dict] = {}
     prep_failures: list[dict] = list(errors)
+    queued_images = 0
 
     for i, group in enumerate(groups):
         try:
@@ -289,6 +335,7 @@ async def _batch_submit(groups: list[dict], errors: list[dict]):
         except ImageError as exc:
             prep_failures.append(_error_entry(group["label"], str(exc)))
             continue
+        queued_images += len(images)
         custom_id = f"label-{i}"  # label ids can contain chars custom_id forbids
         entries[custom_id] = {"file": group["label"], "brand": group["brand"],
                               "abv": group["abv"]}
@@ -301,6 +348,9 @@ async def _batch_submit(groups: list[dict], errors: list[dict]):
         return JSONResponse({"summary": _summary(prep_failures), "results": prep_failures})
 
     mb = await _client.messages.batches.create(requests=requests)
+    # Spend is committed the moment the batch is accepted; charge the estimate
+    # now (actual usage only becomes known when results are fetched).
+    _ledger.charge(bucket, estimate_usd(queued_images, batch_pricing=True))
     _QUEUED_BATCHES[mb.id] = {"entries": entries, "prep_failures": prep_failures}
     return JSONResponse({
         "batch_id": mb.id,
@@ -312,10 +362,11 @@ async def _batch_submit(groups: list[dict], errors: list[dict]):
 
 
 @app.get("/batch/{batch_id}")
-async def batch_results(batch_id: str):
+async def batch_results(request: Request, batch_id: str):
     """Poll a queued batch. Returns processing status until it has ended, then
     the same {"summary": ..., "results": [...]} shape as the sync mode."""
     _require_key()
+    _require_api_key(request)
     try:
         mb = await _client.messages.batches.retrieve(batch_id)
     except anthropic.NotFoundError:

@@ -24,6 +24,18 @@ API_MAX_RETRIES = int(_get("LABEL_CHECK_API_RETRIES", "2"))
 # Bounded fan-out keeps a 200-300 label batch fast without tripping rate limits.
 BATCH_CONCURRENCY = int(_get("LABEL_CHECK_BATCH_CONCURRENCY", "8"))
 
+# --- Access control & abuse limits ------------------------------------------
+# Optional API key for the /batch endpoints. When set, callers must send
+# "Authorization: Bearer <key>" (or "X-API-Key: <key>"). Empty = open.
+API_KEY = _get("LABEL_CHECK_API_KEY", "")
+# Cap on estimated model spend per client network per rolling 24h, in USD.
+# Protects an open deployment's API budget. 0 disables the cap.
+SPEND_CAP_PER_IP_USD = float(_get("LABEL_CHECK_SPEND_CAP_PER_IP", "2.0"))
+# Model pricing used for the spend accounting (per million tokens). Defaults
+# match claude-sonnet-4-6; adjust if LABEL_CHECK_MODEL changes tier.
+USD_PER_MTOK_IN = float(_get("LABEL_CHECK_USD_PER_MTOK_IN", "3.0"))
+USD_PER_MTOK_OUT = float(_get("LABEL_CHECK_USD_PER_MTOK_OUT", "15.0"))
+
 # --- Image handling --------------------------------------------------------
 MAX_IMAGE_EDGE_PX = int(_get("LABEL_CHECK_MAX_EDGE", "1568"))
 MAX_UPLOAD_BYTES = int(_get("LABEL_CHECK_MAX_UPLOAD_BYTES", str(15 * 1024 * 1024)))

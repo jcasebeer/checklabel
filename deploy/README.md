@@ -30,11 +30,16 @@ enables unattended security upgrades, and locks the firewall down to SSH only.
   to service **`http://app:8000`** — that's the app container's name on the
   compose network, resolvable by the cloudflared container.
 
-**3. (Recommended) Put Cloudflare Access in front of the hostname**:
-*Access → Applications → Add an application → Self-hosted*, matching the same
-hostname. An email-OTP or IdP policy gives the UI authentication without any
-auth code in the app; issue a *service token* for programmatic `/batch`
-callers (sent as `CF-Access-Client-Id`/`-Secret` headers).
+**3. Decide the access posture** (all in `deploy/.env`, no code changes):
+
+- **Open demo (default):** no login anywhere. The app's built-in per-network
+  spend cap (`LABEL_CHECK_SPEND_CAP_PER_IP`, default $2/24h, IPv6 grouped at
+  the provider /32) protects the API budget from scripted abuse.
+- **Gated API:** set `LABEL_CHECK_API_KEY`; batch callers must then send
+  `Authorization: Bearer <key>` (or `X-API-Key`). The UI stays open.
+- Cloudflare Access (email OTP / SSO on the hostname) remains available as an
+  extra layer for non-demo deployments, configured entirely on the Cloudflare
+  side.
 
 **4. Seed the server's secrets** (never synced or overwritten by deploys):
 

@@ -41,25 +41,18 @@ curl -X POST {{ base_url }}batch \
       </section>
 
       <section>
-        <h2>Authentication</h2>
-        <p>The app itself has no authentication — deployments put
-        <strong>Cloudflare Access</strong> in front as needed. Browser users log in via
-        the Access prompt (email OTP or SSO). For the API paths there are two common
-        configurations:</p>
-        <table>
-          <tr><th>configuration</th><th>what callers do</th></tr>
-          <tr><td><code>/batch*</code> has an Access <em>Bypass</em> policy
-              (this demo)</td>
-              <td>Nothing — the curl commands on this page work as-is.</td></tr>
-          <tr><td><code>/batch*</code> protected by Access</td>
-              <td>Send an Access <em>service token</em>
-                  (Zero&nbsp;Trust&nbsp;→ Access&nbsp;→ Service&nbsp;Auth) as two headers on
-                  every request, including result polling:
-<pre><code>-H "CF-Access-Client-Id: &lt;token-id&gt;.access" \
--H "CF-Access-Client-Secret: &lt;token-secret&gt;"</code></pre>
-                  A redirect or HTML login page in response means the headers are missing
-                  or the token isn't allowed by the application's Access policy.</td></tr>
-        </table>
+        <h2>Authentication &amp; limits</h2>
+        <p>If the deployment sets an API key (<code>LABEL_CHECK_API_KEY</code> in its
+        environment), every batch call — submission and result polling — must send it,
+        as either header:</p>
+<pre><code>-H "Authorization: Bearer &lt;key&gt;"     # or:  -H "X-API-Key: &lt;key&gt;"</code></pre>
+        <p>Requests without a valid key get <code>401</code>. When no key is configured —
+        as on this demo — the endpoint is open and the curl commands on this page work
+        as-is.</p>
+        <p class="hint">Open or not, model spend is capped per visitor network over a
+        rolling 24&nbsp;hours (IPv6 visitors are grouped by their provider allocation, so
+        rotating addresses doesn't reset the meter). Requests over the cap return
+        <code>429</code> — try again later.</p>
       </section>
 
       <section>

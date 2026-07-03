@@ -95,6 +95,9 @@ class Result:
     checks: list[Check] = field(default_factory=list)
     extracted: dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
+    # Token usage of the extraction call, for spend accounting. Not exposed
+    # in API responses.
+    usage: Optional[dict] = None
 
 
 # --- Normalization helpers --------------------------------------------------
@@ -276,11 +279,16 @@ def extraction_from_message(msg: Any) -> dict:
     raise RuntimeError("Model did not return structured label data.")
 
 
-async def _extract(client: anthropic.AsyncAnthropic, images: Images) -> dict:
+async def _extract(client: anthropic.AsyncAnthropic, images: Images) -> tuple[dict, Optional[dict]]:
     # Retries for 429/5xx/connection errors are handled by the SDK client
     # (max_retries on the shared client); 4xx errors fail fast.
     msg = await client.messages.create(**extract_request_params(images))
-    return extraction_from_message(msg)
+    usage = None
+    u = getattr(msg, "usage", None)
+    if u is not None:
+        usage = {"input_tokens": getattr(u, "input_tokens", 0) or 0,
+                 "output_tokens": getattr(u, "output_tokens", 0) or 0}
+    return extraction_from_message(msg), usage
 
 
 def decide(extracted: dict, expected_brand: str, expected_abv: Optional[float]) -> Result:
@@ -309,7 +317,9 @@ async def verify_label(
 ) -> Result:
     """Extract fields from one label (all its panels) and decide pass/fail."""
     try:
-        extracted = await _extract(client, images)
+        extracted, usage = await _extract(client, images)
     except Exception as exc:  # noqa: BLE001 - surface a clean message, don't crash the batch
         return Result(overall="error", error=str(exc))
-    return decide(extracted, expected_brand, expected_abv)
+    result = decide(extracted, expected_brand, expected_abv)
+    result.usage = usage
+    return result

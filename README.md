@@ -59,10 +59,13 @@ managed platform, or a plain VPS. It honors `$PORT` if the host sets one.
 
 The intended production shape is one locked-down VPS with **zero inbound
 ports**: the app container publishes nothing, a `cloudflared` sidecar makes
-outbound-only connections to Cloudflare's edge (which terminates TLS and can
-enforce authentication via Cloudflare Access), and the firewall denies all
-inbound traffic except SSH. See [`deploy/README.md`](deploy/README.md) for the
-full setup; day-to-day releases are one command:
+outbound-only connections to Cloudflare's edge (which terminates TLS), and the
+firewall denies all inbound traffic except SSH. Abuse protection is built into
+the app: an optional API key for `/batch` (`LABEL_CHECK_API_KEY`) and a
+per-visitor-network **spend cap** on estimated model cost (IPv6 grouped at the
+provider /32, so address rotation doesn't reset it). See
+[`deploy/README.md`](deploy/README.md) for the full setup; day-to-day releases
+are one command:
 
 ```bash
 DEPLOY_HOST=deploy@your-vps ./scripts/deploy.sh
@@ -141,6 +144,8 @@ All optional, via environment variables (see `.env.example`):
 | `LABEL_CHECK_ABV_TOLERANCE` | `0.0` | Allowed ABV difference in percentage points. |
 | `LABEL_CHECK_BRAND_WARN` | `0.90` | Similarity above which a brand near-miss is flagged for review. |
 | `LABEL_CHECK_MAX_IMAGES_PER_LABEL` | `8` | Max panels per label (checked together in one call). |
+| `LABEL_CHECK_API_KEY` | *(unset)* | If set, `/batch` requires `Authorization: Bearer <key>` or `X-API-Key`. Unset = open. |
+| `LABEL_CHECK_SPEND_CAP_PER_IP` | `2.0` | Max estimated model spend (USD) per visitor network per rolling 24h. IPv4 per address, IPv6 per provider /32. `0` disables. |
 
 ## Testing
 
@@ -214,8 +219,9 @@ A human reviewer gets those, which is the point of the screening design.
 
 - **Standalone POC.** No integration with the existing COLA system and no data
   persistence — nothing about a label is stored after the response is returned.
-  (Exception: `mode=queued` keeps a batch's expected values in server memory
-  while it is in flight.)
+  (Exceptions, both in-memory only: `mode=queued` keeps a batch's expected
+  values while it is in flight, and the spend cap keeps a rolling ledger of
+  estimated cost per visitor network. A restart forgets both.)
 - **Three checks on purpose.** Brand, ABV, and the government warning are the
   checks named in the discovery interviews. Other label requirements (class/type,
   net contents, bottler name and address, country of origin) are deliberately
