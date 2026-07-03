@@ -22,17 +22,19 @@ The design principle is **the model extracts, the code decides.**
 
 Keeping judgment in code — rather than asking the model "does this pass?" — makes
 results **deterministic, auditable, and tunable** without re-prompting. It matters
-most for the government warning, which must match the statutory text *exactly*:
-the model transcribes it, and the code does a strict comparison against the
-canonical string (defined in `app/config.py`, per 27 CFR 16.21).
+most for the government warning, which must match the statutory text: the model
+transcribes it verbatim, and the code compares it against the canonical string
+(defined in `app/config.py`, per 27 CFR 16.21) — exact on words and punctuation,
+insensitive to whitespace, since line wraps and tight kerning are typography, not
+wording (a real TTB-approved label prints `WARNING:(1)` with no space).
 
 The three checks:
 
 | Field | Rule |
 |---|---|
-| Brand name | Exact after normalizing case/punctuation. The application's brand appearing inside a larger printed lockup (registry brand `TX` on a label reading `TX Experimental Series ...` — a real case surfaced by the COLA eval) or a very close match is flagged **needs review** rather than silently passed or failed. |
+| Brand name | Compared (after normalizing case/punctuation) against **every name printed on the label** — producer, brand, product/fanciful — because applicants register either one as the brand (`NEW BELGIUM` vs `FAT TIRE`, both on the label; a real pattern surfaced by the COLA eval). An exact match on any candidate passes; a whole-word containment (brand `TX` inside `TX Experimental Series ...`) or a very close match is flagged **needs review** rather than silently passed or failed. |
 | Alcohol content | Numeric match within a configurable tolerance (default: exact). If the application lists no ABV there is nothing to compare, so the check is reported as **skipped** and does not block approval. |
-| Government warning | Present **and** wording matches exactly **and** header is ALL CAPS **and** header appears bold. Anything else fails, with the specific reason. Header capitalization is judged by the code from the verbatim transcription (e.g. `Government Warning:` in title case fails even if the model mis-reports it). |
+| Government warning | Present **and** wording matches (exact words and punctuation, whitespace-insensitive) **and** header is ALL CAPS **and** header appears bold. Anything else fails, with the specific reason. Header capitalization is judged by the code from the verbatim transcription (e.g. `Government Warning:` in title case fails even if the model mis-reports it). |
 
 ## Quick start (local)
 
@@ -138,6 +140,7 @@ All optional, via environment variables (see `.env.example`):
 | `LABEL_CHECK_BATCH_CONCURRENCY` | `8` | Parallel calls in `/batch`. |
 | `LABEL_CHECK_ABV_TOLERANCE` | `0.0` | Allowed ABV difference in percentage points. |
 | `LABEL_CHECK_BRAND_WARN` | `0.90` | Similarity above which a brand near-miss is flagged for review. |
+| `LABEL_CHECK_MAX_IMAGES_PER_LABEL` | `8` | Max panels per label (checked together in one call). |
 
 ## Testing
 
@@ -172,13 +175,14 @@ tests make real model calls and are excluded from a plain `pytest` run.
 For a larger measurement than the smoke-level integration tests:
 
 ```bash
-python scripts/fetch_cola_samples.py --limit 110   # ~200 label images
+python scripts/fetch_cola_samples.py --limit 110   # ~170 label images
 python scripts/run_cola_eval.py
 ```
 
-Because the model only *extracts* and the code *decides*, each image needs
-exactly one model call regardless of how many expectations are scored against
-it. The eval extracts every image once through the **Message Batches API**
+Because the model only *extracts* and the code *decides*, each label needs
+exactly one model call — all its panels in a single request — regardless of how
+many expectations are scored against it. The eval extracts every label once
+through the **Message Batches API**
 (50% token cost), caches extractions in `tests/fixtures/cola/extractions.json`
 (re-scoring after a rule change is free: `--rescore`; the cache is keyed to the
 extraction schema and re-extracts automatically when it changes), then scores
@@ -194,12 +198,13 @@ different COLA (must not). Per-case pass/fail metadata lands in
 | Negative cases (wrong brand rejected) | **110/110** | zero false approvals |
 | Overall | **97.7%** | |
 
-The first eval round scored 92.3% and directly drove two rule changes: the
+The first eval round scored 92.3% and directly drove three rule changes: the
 whole-word **containment** rule (registry brand `TX` printed as `TX
-Experimental Series ...`) and multi-candidate brand matching (`name_candidates`
+Experimental Series ...`), multi-candidate brand matching (`name_candidates`
 in the extraction schema), because applicants register either the producer
 name *or* the product name as the brand (`NEW BELGIUM` vs `FAT TIRE`, both on
-the label). The five residual failures are all in the safe direction — false
+the label), and whitespace-insensitive warning wording (a TTB-approved label
+prints `WARNING:(1)` with no space). The five residual failures are all in the safe direction — false
 "does not match", never a false approval: a stylized `SABÉ` wordmark
 transcribed as `SAKE` (×3), and two COLAs whose registered brand isn't legibly
 printed on the label at all (`KL` monogram for KENTUCKY LEGEND; CASTANNOVE).
@@ -228,4 +233,3 @@ A human reviewer gets those, which is the point of the screening design.
   allowlist outbound access to `api.anthropic.com` — nothing else. htmx is
   vendored locally (`app/static/htmx.min.js`) and the UI uses native system
   font stacks, so the browser makes no external requests at all.
-```
