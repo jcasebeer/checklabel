@@ -39,6 +39,28 @@ curl -X POST {{ base_url }}batch \
       </section>
 
       <section>
+        <h2>Authentication</h2>
+        <p>The app itself has no authentication — deployments put
+        <strong>Cloudflare Access</strong> in front as needed. Browser users log in via
+        the Access prompt (email OTP or SSO). For the API paths there are two common
+        configurations:</p>
+        <table>
+          <tr><th>configuration</th><th>what callers do</th></tr>
+          <tr><td><code>/batch*</code> has an Access <em>Bypass</em> policy
+              (this demo)</td>
+              <td>Nothing — the curl commands on this page work as-is.</td></tr>
+          <tr><td><code>/batch*</code> protected by Access</td>
+              <td>Send an Access <em>service token</em>
+                  (Zero&nbsp;Trust&nbsp;→ Access&nbsp;→ Service&nbsp;Auth) as two headers on
+                  every request, including result polling:
+<pre><code>-H "CF-Access-Client-Id: &lt;token-id&gt;.access" \
+-H "CF-Access-Client-Secret: &lt;token-secret&gt;"</code></pre>
+                  A redirect or HTML login page in response means the headers are missing
+                  or the token isn't allowed by the application's Access policy.</td></tr>
+        </table>
+      </section>
+
+      <section>
         <h2>Request</h2>
         <p><code>POST /batch</code> as <code>multipart/form-data</code>:</p>
         <table>
