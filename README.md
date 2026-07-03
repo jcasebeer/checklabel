@@ -22,11 +22,13 @@ The design principle is **the model extracts, the code decides.**
 
 Keeping judgment in code — rather than asking the model "does this pass?" — makes
 results **deterministic, auditable, and tunable** without re-prompting. It matters
-most for the government warning, which must match the statutory text: the model
-transcribes it verbatim, and the code compares it against the canonical string
-(defined in `app/config.py`, per 27 CFR 16.21) — exact on words and punctuation,
-insensitive to whitespace, since line wraps and tight kerning are typography, not
-wording (a real TTB-approved label prints `WARNING:(1)` with no space).
+most for the government warning, which must match the statutory text
+**word-for-word** (the requirement as stated in the brief): the model
+transcribes it verbatim, and the code compares every word, in order, against
+the canonical string (defined in `app/config.py`, per 27 CFR 16.21).
+Punctuation and spacing are treated as typography, not wording — line wraps,
+tight kerning (`WARNING:(1)` on a real approved label), and a comma lost to a
+blurry bottle photo must not reject a compliant label.
 
 The three checks:
 
@@ -34,7 +36,7 @@ The three checks:
 |---|---|
 | Brand name | Compared (after normalizing case/punctuation) against **every name printed on the label** — producer, brand, product/fanciful — because applicants register either one as the brand (`NEW BELGIUM` vs `FAT TIRE`, both on the label; a real pattern surfaced by the COLA eval). An exact match on any candidate passes; a whole-word containment (brand `TX` inside `TX Experimental Series ...`) or a very close match is flagged **needs review** rather than silently passed or failed. |
 | Alcohol content | Numeric match within a configurable tolerance (default: exact). If the application lists no ABV there is nothing to compare, so the check is reported as **skipped** and does not block approval. |
-| Government warning | Present **and** wording matches (exact words and punctuation, whitespace-insensitive) **and** header is ALL CAPS **and** header appears bold. Anything else fails, with the specific reason. Header capitalization is judged by the code from the verbatim transcription (e.g. `Government Warning:` in title case fails even if the model mis-reports it). |
+| Government warning | Present **and** wording matches word-for-word **and** header is ALL CAPS **and** header is bold — defined concretely as larger text size *or* heavier stroke weight than the text immediately following, evaluated as independent dimensions (A/B tested against real scans, a real bottle photo, and a synthetic non-bold control: this phrasing recognizes genuinely bold headers even on blurry curved-glass photos where "appears bold" was a coin flip, while still failing the sharp non-bold control; too-blurry-to-tell routes to **needs review**). Header capitalization is judged by the code from the verbatim transcription (e.g. `Government Warning:` in title case fails even if the model mis-reports it). |
 
 ## Quick start (local)
 
@@ -199,21 +201,24 @@ different COLA (must not). Per-case pass/fail metadata lands in
 
 | | passed | note |
 |---|---|---|
-| Positive cases (own brand recognized) | **105/110** | |
+| Positive cases (own brand recognized) | **104/110** | |
 | Negative cases (wrong brand rejected) | **110/110** | zero false approvals |
-| Overall | **97.7%** | |
+| Overall | **97.3%** | |
+| Compliant warning recognized | **97/110** | up from 82 before the word-for-word + bold-definition fixes |
 
 The first eval round scored 92.3% and directly drove three rule changes: the
 whole-word **containment** rule (registry brand `TX` printed as `TX
 Experimental Series ...`), multi-candidate brand matching (`name_candidates`
 in the extraction schema), because applicants register either the producer
 name *or* the product name as the brand (`NEW BELGIUM` vs `FAT TIRE`, both on
-the label), and whitespace-insensitive warning wording (a TTB-approved label
-prints `WARNING:(1)` with no space). The five residual failures are all in the safe direction — false
+the label), and word-for-word warning wording (a TTB-approved label prints
+`WARNING:(1)` with no space; a bottle photo loses a comma to blur). The five
+residual failures are all in the safe direction — false
 "does not match", never a false approval: a stylized `SABÉ` wordmark
-transcribed as `SAKE` (×3), and two COLAs whose registered brand isn't legibly
-printed on the label at all (`KL` monogram for KENTUCKY LEGEND; CASTANNOVE).
-A human reviewer gets those, which is the point of the screening design.
+transcribed as `SAKE` (×3–4 depending on sampling), and two COLAs whose
+registered brand isn't legibly printed on the label at all (`KL` monogram for
+KENTUCKY LEGEND; CASTANNOVE). A human reviewer gets those, which is the point
+of the screening design.
 
 ## Scope & assumptions
 

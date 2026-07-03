@@ -170,9 +170,20 @@ class TestCheckWarning:
         tight = WARNING.replace("WARNING: (1)", "WARNING:(1)").replace(". (2) ", ".(2) ")
         assert check_warning(good_warning(text_verbatim=tight)).status == "pass"
 
-    def test_missing_punctuation_still_fails(self):
-        no_colon = WARNING.replace("GOVERNMENT WARNING:", "GOVERNMENT WARNING", 1)
-        assert check_warning(good_warning(text_verbatim=no_colon)).status == "fail"
+    def test_punctuation_is_not_part_of_word_for_word(self):
+        # The brief requires "exact... word-for-word" — a transcription that
+        # loses a comma on a blurry bottle photo must not fail wording
+        # (real case: 'Surgeon General, women' read without the comma).
+        no_comma = WARNING.replace("Surgeon General,", "Surgeon General")
+        assert check_warning(good_warning(text_verbatim=no_comma)).status == "pass"
+
+    def test_missing_or_changed_words_still_fail(self):
+        dropped = WARNING.replace(" not drink", " drink")
+        assert check_warning(good_warning(text_verbatim=dropped)).status == "fail"
+        reworded = WARNING.replace("birth defects", "developmental issues")
+        assert check_warning(good_warning(text_verbatim=reworded)).status == "fail"
+        extra = WARNING + " Drink responsibly."
+        assert check_warning(good_warning(text_verbatim=extra)).status == "fail"
 
 
 class TestHeaderAllCaps:

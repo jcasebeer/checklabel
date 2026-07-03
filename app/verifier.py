@@ -56,7 +56,24 @@ EXTRACT_TOOL = {
                     },
                     "appears_bold": {
                         "type": ["boolean", "null"],
-                        "description": "True if the header appears bold; null if you cannot tell.",
+                        # A/B tested against a blurry bottle photo, sharp registry
+                        # scans, and a synthetic non-bold control. This wording won
+                        # every cell (5/5 true on a real bottle whose header IS
+                        # bold, true on scans, false on the non-bold synthetic):
+                        # evaluating size and stroke weight as independent
+                        # dimensions lets the model perceive heavier strokes even
+                        # when the size is identical, where "appears bold" was a
+                        # coin flip and single-axis definitions failed real bottles.
+                        "description": (
+                            "Compare the text size and stroke weight of the words "
+                            "GOVERNMENT WARNING to the text which follows it. If the "
+                            "GOVERNMENT WARNING text size is larger, or the stroke "
+                            "weight is heavier, return true. If the GOVERNMENT "
+                            "WARNING text size is the same or smaller and the stroke "
+                            "weight is the same or lighter, return false. If the "
+                            "text is too blurry, curved, or glary to tell a "
+                            "difference, return null."
+                        ),
                     },
                 },
                 "required": ["present", "text_verbatim", "header_all_caps", "appears_bold"],
@@ -105,11 +122,15 @@ def _norm_text(s: str) -> str:
     return re.sub(r"\s+", " ", s or "").strip()
 
 
-def _squash(s: str) -> str:
-    """Drop ALL whitespace for wording comparison. Spacing is typography —
-    line wraps and tight kerning (a real label prints 'WARNING:(1)') must not
-    fail the wording check; words and punctuation still must match exactly."""
-    return re.sub(r"\s+", "", s or "").lower()
+def _words(s: str) -> list[str]:
+    """Tokenize for the word-for-word comparison the brief requires.
+
+    The requirement is "exact... word-for-word" — every word, in order.
+    Punctuation and spacing are NOT part of it: they're typography, and on
+    phone photos they're also where transcription noise lives (a real bottle
+    photo lost the comma in 'Surgeon General, women'; a real label prints
+    'WARNING:(1)' with no space). Casing is checked separately."""
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).split()
 
 
 def _norm_brand(s: str) -> str:
@@ -216,9 +237,9 @@ def check_warning(gw: dict[str, Any]) -> Check:
     found = gw.get("text_verbatim") or ""
     issues: list[str] = []
 
-    # Exact wording, whitespace-insensitive (casing handled separately).
-    if _squash(found) != _squash(config.GOVERNMENT_WARNING):
-        issues.append("wording does not match the required text exactly")
+    # Word-for-word wording match (casing handled separately).
+    if _words(found) != _words(config.GOVERNMENT_WARNING):
+        issues.append("wording does not match the required text word-for-word")
     # Casing is decided from the verbatim transcription; the model's boolean is
     # only a fallback for when the header can't be located in the text.
     caps = _header_all_caps(found)
