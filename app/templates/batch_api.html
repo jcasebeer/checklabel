@@ -33,9 +33,11 @@ curl -X POST {{ base_url }}batch \
   -F 'files=@alvides.jpg' \
   -F 'files=@tx-panel1.jpg' \
   -F 'files=@tx-panel2.jpg'</code></pre>
-        <p class="hint">The <code>tx</code> label is deliberately interesting: its registered brand
-        (<code>TX</code>) appears inside a longer printed name, so it comes back
-        <em>needs&nbsp;review</em> rather than a silent pass — that's the screening design working.</p>
+        <p class="hint">All three labels are TTB-approved and should come back
+        <em>Approved</em> (alcohol content shows as <em>skipped</em> since the sample manifest
+        doesn't list expected values). The <code>tx</code> entry demonstrates a multi-panel
+        label: its front and back are analyzed together in one pass, so the brand and the
+        government warning can come from different panels.</p>
       </section>
 
       <section>
@@ -105,15 +107,15 @@ curl -X POST {{ base_url }}batch \
       <section>
         <h2>Response</h2>
 <pre><code>{
-  "summary": { "total": 3, "passed": 2, "failed": 0, "needs_review": 1, "errored": 0 },
+  "summary": { "total": 2, "passed": 1, "failed": 0, "needs_review": 1, "errored": 0 },
   "results": [
     {
-      "file": "tx",
+      "file": "harbor-light",
       "result": {
         "overall": "warn",          // pass | fail | warn | error
         "checks": [
           { "field": "Brand name", "status": "warn",
-            "expected": "TX", "found": "TX Experimental Series ...",
+            "expected": "Harbor Light", "found": "Harbor Light Brewing Co.",
             "detail": "The application's brand appears within the label text — please confirm by eye." },
           { "field": "Alcohol content", "status": "skipped", ... },
           { "field": "Government warning", "status": "pass", ... }

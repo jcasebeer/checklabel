@@ -102,6 +102,13 @@ def _norm_text(s: str) -> str:
     return re.sub(r"\s+", " ", s or "").strip()
 
 
+def _squash(s: str) -> str:
+    """Drop ALL whitespace for wording comparison. Spacing is typography —
+    line wraps and tight kerning (a real label prints 'WARNING:(1)') must not
+    fail the wording check; words and punctuation still must match exactly."""
+    return re.sub(r"\s+", "", s or "").lower()
+
+
 def _norm_brand(s: str) -> str:
     s = re.sub(r"[^\w\s]", "", (s or ""))
     return re.sub(r"\s+", " ", s).strip().upper()
@@ -206,8 +213,8 @@ def check_warning(gw: dict[str, Any]) -> Check:
     found = gw.get("text_verbatim") or ""
     issues: list[str] = []
 
-    # Exact wording (case-insensitive on the body; casing handled separately).
-    if _norm_text(found).lower() != _norm_text(config.GOVERNMENT_WARNING).lower():
+    # Exact wording, whitespace-insensitive (casing handled separately).
+    if _squash(found) != _squash(config.GOVERNMENT_WARNING):
         issues.append("wording does not match the required text exactly")
     # Casing is decided from the verbatim transcription; the model's boolean is
     # only a fallback for when the header can't be located in the text.

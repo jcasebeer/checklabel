@@ -164,6 +164,16 @@ class TestCheckWarning:
         wrapped = WARNING.replace(" impairs ", "\nimpairs ").replace(" (2) ", "\n(2) ")
         assert check_warning(good_warning(text_verbatim=wrapped)).status == "pass"
 
+    def test_tight_kerning_spacing_is_not_a_wording_mismatch(self):
+        # Real TTB-approved label (ALVIDES): prints "GOVERNMENT WARNING:(1)"
+        # with no space after the colon. Spacing is typography, not wording.
+        tight = WARNING.replace("WARNING: (1)", "WARNING:(1)").replace(". (2) ", ".(2) ")
+        assert check_warning(good_warning(text_verbatim=tight)).status == "pass"
+
+    def test_missing_punctuation_still_fails(self):
+        no_colon = WARNING.replace("GOVERNMENT WARNING:", "GOVERNMENT WARNING", 1)
+        assert check_warning(good_warning(text_verbatim=no_colon)).status == "fail"
+
 
 class TestHeaderAllCaps:
     def test_detection(self):

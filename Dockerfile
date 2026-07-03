@@ -16,4 +16,8 @@ COPY app ./app
 EXPOSE 8000
 
 # Honor the platform's $PORT if set (Railway/Render/Fly), default 8000 for VPS.
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# --forwarded-allow-ips='*': trust X-Forwarded-Proto from the reverse proxy so
+# generated URLs say https. Safe here because the container publishes no ports —
+# only the cloudflared sidecar on the internal network can reach it. Revisit if
+# you ever expose the port directly.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
