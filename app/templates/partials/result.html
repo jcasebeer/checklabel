@@ -1,0 +1,32 @@
+{% if result.overall == "error" %}
+  <div class="verdict"><div class="stamp error">Couldn't check<small>Try again</small></div></div>
+  <div class="errbox">{{ result.error }}</div>
+{% else %}
+  {% set labels = {"pass": "Approved", "fail": "Rejected", "warn": "Needs review"} %}
+  {% set captions = {"pass": "Matches application", "fail": "Does not match", "warn": "Check by eye"} %}
+  <div class="verdict">
+    <div class="stamp {{ result.overall }}">
+      {{ labels[result.overall] }}
+      <small>TTB · Label Check</small>
+    </div>
+  </div>
+
+  <div class="checklist">
+    {% for c in result.checks %}
+      {% set glyph = {"pass": "✓", "fail": "✕", "warn": "!", "skipped": "–"} %}
+      <div class="check {{ c.status }}">
+        <div class="mark" aria-hidden="true">{{ glyph[c.status] }}</div>
+        <div>
+          <h3>{{ c.field }}</h3>
+          <p class="detail">{{ c.detail }}</p>
+          {% if c.expected or c.found %}
+          <div class="cmp">
+            <div><span class="k">application:</span> <span>{{ c.expected or "—" }}</span></div>
+            <div><span class="k">on label:&nbsp;&nbsp;</span> <span>{{ c.found or "—" }}</span></div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}

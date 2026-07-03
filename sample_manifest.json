@@ -1,0 +1,8 @@
+{
+  "stones_throw_red.jpg": { "brand": "Stone's Throw", "abv": 13.5 },
+  "harbor-light-ipa": {
+    "brand": "Harbor Light IPA",
+    "abv": 6.2,
+    "files": ["harbor_light_front.jpg", "harbor_light_back.jpg"]
+  }
+}

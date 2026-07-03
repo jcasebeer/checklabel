@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.pytest_cache/
+# Downloaded TTB COLA fixtures (regenerate with scripts/fetch_cola_samples.py)
+tests/fixtures/cola/

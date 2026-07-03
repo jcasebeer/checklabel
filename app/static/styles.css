@@ -1,0 +1,223 @@
+/* TTB Label Check — "approval desk" visual system.
+   Palette is warm paper + a deep official green seal, with a green/amber/red
+   verdict language. The signature element is the verdict stamp. Controls are
+   oversized and high-contrast for non-technical, older users. */
+
+:root {
+  --paper:      #EDEAE3;
+  --surface:    #FBFAF7;
+  --ink:        #1E2422;
+  --ink-soft:   #5A635E;
+  --seal:       #14503C;
+  --approve:    #1B7A57;
+  --reject:     #A32A22;
+  --brass:      #9C7A3C;
+  --line:       rgba(20, 80, 60, 0.16);
+  --radius:     10px;
+  --shadow:     0 1px 2px rgba(30,36,34,.06), 0 8px 24px rgba(30,36,34,.06);
+
+  /* Native font stacks only — no external font requests, so the UI renders
+     identically inside a locked-down network. */
+  --font-display: "Avenir Next", "Seravek", "Segoe UI Variable Display",
+                  "Segoe UI", system-ui, sans-serif;
+  --font-body:    system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:    ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 20px 96px; }
+
+/* --- Masthead ----------------------------------------------------------- */
+.masthead {
+  display: flex; align-items: center; gap: 16px;
+  padding: 28px 0 24px;
+  border-bottom: 2px solid var(--seal);
+  margin-bottom: 36px;
+}
+.crest {
+  flex: none;
+  width: 52px; height: 52px; border-radius: 50%;
+  border: 2.5px solid var(--seal);
+  display: grid; place-items: center;
+  color: var(--seal); font-family: var(--font-mono);
+  font-weight: 600; font-size: 20px; letter-spacing: -1px;
+}
+.masthead h1 {
+  margin: 0; font-family: var(--font-display);
+  font-weight: 700; font-size: 24px; letter-spacing: -0.01em;
+}
+.masthead p { margin: 2px 0 0; color: var(--ink-soft); font-size: 15px; }
+.masthead-nav { margin-left: auto; align-self: center; }
+.masthead-nav a {
+  font-family: var(--font-display); font-weight: 600; font-size: 15px;
+  color: var(--seal); text-decoration: none; white-space: nowrap;
+  border: 1.5px solid var(--seal); border-radius: var(--radius);
+  padding: 8px 14px;
+}
+.masthead-nav a:hover { background: rgba(20,80,60,.06); }
+
+/* --- Docs page (batch API) ---------------------------------------------- */
+.docs section { margin-bottom: 36px; }
+.docs h2 { font-family: var(--font-display); font-size: 20px; margin: 0 0 10px; }
+.docs h3 { font-family: var(--font-display); font-size: 16px; margin: 18px 0 8px; }
+.docs p { margin: 8px 0; }
+.docs pre {
+  background: var(--surface); border: 1.5px solid var(--line);
+  border-radius: var(--radius); padding: 16px; overflow-x: auto;
+  font-family: var(--font-mono); font-size: 14px; line-height: 1.55;
+}
+.docs code { font-family: var(--font-mono); font-size: .92em; }
+.docs p code, .docs td code, .docs th code {
+  background: rgba(20,80,60,.07); border-radius: 4px; padding: 1px 5px;
+}
+.docs table {
+  border-collapse: collapse; width: 100%; font-size: 16px; margin: 10px 0;
+}
+.docs th, .docs td {
+  text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.docs th { font-family: var(--font-display); font-size: 14px; color: var(--ink-soft); }
+.dl {
+  font-family: var(--font-display); font-weight: 700; color: var(--surface);
+  background: var(--seal); text-decoration: none;
+  border-radius: var(--radius); padding: 10px 16px; display: inline-block;
+}
+.dl:hover { filter: brightness(1.06); }
+.dl-note { color: var(--ink-soft); }
+
+/* --- Steps / form ------------------------------------------------------- */
+.step { margin-bottom: 28px; }
+.step-head {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 12px;
+}
+.step-num {
+  font-family: var(--font-mono); font-size: 14px; font-weight: 600;
+  color: var(--surface); background: var(--seal);
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; flex: none;
+  align-self: center;
+}
+.step-head h2 {
+  margin: 0; font-family: var(--font-display);
+  font-size: 18px; font-weight: 600;
+}
+
+label.field-label { display: block; font-weight: 600; margin-bottom: 6px; }
+
+.text-input, .drop {
+  width: 100%; font-family: var(--font-body); font-size: 18px;
+  color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--line); border-radius: var(--radius);
+}
+.text-input { padding: 14px 16px; }
+.text-input:focus, .drop:focus-within, .file-btn:focus-visible, .submit:focus-visible {
+  outline: 3px solid var(--brass); outline-offset: 2px;
+}
+
+.abv-row { display: flex; align-items: center; gap: 10px; max-width: 220px; }
+.abv-row .text-input { text-align: right; }
+.abv-row .unit { font-family: var(--font-mono); color: var(--ink-soft); font-size: 20px; }
+
+/* File picker styled as an obvious button + filename echo */
+.drop { padding: 18px; display: flex; align-items: center; gap: 14px; }
+.file-btn {
+  font-family: var(--font-body); font-size: 16px; font-weight: 600;
+  color: var(--seal); background: transparent;
+  border: 1.5px solid var(--seal); border-radius: var(--radius);
+  padding: 10px 18px; cursor: pointer; white-space: nowrap;
+}
+.file-btn:hover { background: rgba(20,80,60,.06); }
+.file-name { color: var(--ink-soft); font-size: 16px; overflow: hidden; text-overflow: ellipsis; }
+input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.hint { color: var(--ink-soft); font-size: 14px; margin-top: 8px; }
+
+/* --- Submit ------------------------------------------------------------- */
+.submit {
+  font-family: var(--font-display); font-size: 19px; font-weight: 700;
+  letter-spacing: .01em; color: var(--surface); background: var(--seal);
+  border: none; border-radius: var(--radius); padding: 16px 28px;
+  cursor: pointer; width: 100%; box-shadow: var(--shadow);
+}
+.submit:hover { filter: brightness(1.06); }
+.submit:disabled { opacity: .6; cursor: default; }
+
+/* HTMX loading indicator */
+.spinner { display: none; align-items: center; gap: 10px; color: var(--ink-soft);
+  margin-top: 16px; font-size: 16px; }
+.htmx-request .spinner { display: flex; }
+.htmx-request .submit { opacity: .6; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--seal);
+  animation: pulse 1s infinite ease-in-out; }
+@keyframes pulse { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
+
+/* --- Result ------------------------------------------------------------- */
+.result { margin-top: 40px; }
+.verdict {
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  padding: 32px 0 8px;
+}
+.stamp {
+  font-family: var(--font-display); font-weight: 800;
+  font-size: 34px; letter-spacing: .06em; text-transform: uppercase;
+  padding: 14px 30px; border-radius: 12px;
+  transform: rotate(-5deg);
+  border: 4px double currentColor;
+}
+.stamp small {
+  display: block; font-family: var(--font-mono); font-weight: 500;
+  font-size: 11px; letter-spacing: .18em; text-align: center;
+  margin-top: 4px; opacity: .8;
+}
+.stamp.pass   { color: var(--approve); }
+.stamp.fail   { color: var(--reject); }
+.stamp.warn   { color: var(--brass); }
+.stamp.error  { color: var(--ink-soft); transform: none; border-style: dashed; font-size: 22px; }
+
+.checklist { margin-top: 22px; border-top: 1px solid var(--line); }
+.check {
+  display: grid; grid-template-columns: 28px 1fr; gap: 14px;
+  padding: 18px 4px; border-bottom: 1px solid var(--line);
+}
+.mark { font-size: 20px; line-height: 1.3; font-weight: 700; }
+.check.pass .mark { color: var(--approve); }
+.check.fail .mark { color: var(--reject); }
+.check.warn .mark { color: var(--brass); }
+.check.skipped .mark { color: var(--ink-soft); }
+.check.skipped .detail { font-style: italic; }
+.check h3 { margin: 0 0 4px; font-family: var(--font-display); font-size: 17px; }
+.check .detail { margin: 0; color: var(--ink-soft); font-size: 16px; }
+.check .cmp { margin-top: 8px; font-family: var(--font-mono); font-size: 14px; }
+.check .cmp span { color: var(--ink); }
+.check .cmp .k { color: var(--ink-soft); }
+
+.errbox {
+  background: rgba(163,42,34,.06); border: 1px solid rgba(163,42,34,.25);
+  border-radius: var(--radius); padding: 18px; color: var(--ink);
+  font-size: 16px;
+}
+
+@media (max-width: 520px) {
+  body { font-size: 17px; }
+  .masthead h1 { font-size: 21px; }
+  .stamp { font-size: 28px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot { animation: none; }
+  .stamp { transform: none; }
+}

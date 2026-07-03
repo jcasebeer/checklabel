@@ -1,0 +1,36 @@
+# Production stack: the app + a Cloudflare Tunnel sidecar.
+#
+# Zero inbound ports: the app publishes nothing on the host — cloudflared
+# joins the same Docker network, reaches the app as http://app:8000, and makes
+# only OUTBOUND connections to Cloudflare's edge. The VPS firewall can deny
+# all inbound traffic except SSH.
+#
+# Run from this directory so Docker Compose picks up ./.env:
+#   docker compose up -d --build
+name: label-check
+
+services:
+  app:
+    build:
+      context: ..
+    restart: unless-stopped
+    env_file: .env            # ANTHROPIC_API_KEY (+ optional LABEL_CHECK_* overrides)
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      # Token of a remotely-managed tunnel (Cloudflare Zero Trust dashboard).
+      # The tunnel's public hostname must point at  http://app:8000
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in deploy/.env}
+    depends_on:
+      app:
+        condition: service_healthy

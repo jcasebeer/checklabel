@@ -1,0 +1,42 @@
+#cloud-config
+# First-boot provisioning for the label-check VPS (Ubuntu 22.04/24.04).
+# Paste into your provider's "user data" field when creating the server,
+# after replacing the SSH key placeholder.
+#
+# Result: a non-root deploy user with Docker, automatic security updates,
+# and a firewall that denies ALL inbound traffic except SSH. The app itself
+# is reached only through the Cloudflare Tunnel (outbound-only), so no web
+# ports are ever opened.
+
+users:
+  - name: deploy
+    groups: [docker]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAA... REPLACE_WITH_YOUR_PUBLIC_KEY
+
+package_update: true
+package_upgrade: true
+packages:
+  - ufw
+  - unattended-upgrades
+  - rsync
+
+# Docker from the official convenience script (installs compose plugin too).
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+  - mkdir -p /opt/label-check
+  - chown deploy:deploy /opt/label-check
+  # Firewall: deny everything inbound except SSH. No HTTP/HTTPS ports —
+  # cloudflared connects outward to Cloudflare.
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow OpenSSH
+  - ufw --force enable
+  # Hardening: key-only SSH, no root login.
+  - sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+  - sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+  - systemctl restart ssh
+  - dpkg-reconfigure -f noninteractive unattended-upgrades

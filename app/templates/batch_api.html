@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Batch API — TTB Label Check</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="masthead">
+      <div class="crest" aria-hidden="true">✓</div>
+      <div>
+        <h1>Batch API</h1>
+        <p>Check a few hundred labels in one request.</p>
+      </div>
+      <nav class="masthead-nav"><a href="/">← Single check</a></nav>
+    </header>
+
+    <main class="docs">
+      <section>
+        <h2>Try it now</h2>
+        <p>
+          <a class="dl" href="/static/sample-batch.zip" download>Download sample-batch.zip</a>
+          <span class="dl-note">— four real label images from the TTB Public COLA Registry
+          and a ready-to-submit <code>manifest.json</code> (one label is a front/back pair).</span>
+        </p>
+<pre><code>unzip sample-batch.zip -d sample && cd sample
+
+curl -X POST {{ base_url }}batch \
+  -F 'manifest=&lt;manifest.json' \
+  -F 'files=@barolo-chinato.jpg' \
+  -F 'files=@alvides.jpg' \
+  -F 'files=@tx-panel1.jpg' \
+  -F 'files=@tx-panel2.jpg'</code></pre>
+        <p class="hint">The <code>tx</code> label is deliberately interesting: its registered brand
+        (<code>TX</code>) appears inside a longer printed name, so it comes back
+        <em>needs&nbsp;review</em> rather than a silent pass — that's the screening design working.</p>
+      </section>
+
+      <section>
+        <h2>Request</h2>
+        <p><code>POST /batch</code> as <code>multipart/form-data</code>:</p>
+        <table>
+          <tr><th>field</th><th>value</th></tr>
+          <tr><td><code>files</code></td><td>One part per label image (repeat the field).</td></tr>
+          <tr><td><code>manifest</code></td><td>JSON object with the expected values for every uploaded file (shapes below).</td></tr>
+          <tr><td><code>mode</code></td><td><code>sync</code> (default) or <code>queued</code>.</td></tr>
+        </table>
+
+        <h3>Manifest shapes</h3>
+        <p>Key by <strong>filename</strong> for a single-image label, or by any
+        <strong>label id</strong> with a <code>files</code> list for a multi-panel label —
+        all panels of one label are analyzed together in a single pass:</p>
+<pre><code>{
+  "stones_throw_red.jpg": { "brand": "Stone's Throw", "abv": 13.5 },
+  "harbor-light":         { "brand": "Harbor Light", "abv": 6.2,
+                            "files": ["hl_front.jpg", "hl_back.jpg"] }
+}</code></pre>
+        <p class="hint"><code>abv</code> is optional — if the application doesn't list one, that check
+        is reported as <em>skipped</em> and doesn't block approval. Files without a manifest entry,
+        and manifest entries without an uploaded file, are reported as inline errors — never
+        silently dropped.</p>
+      </section>
+
+      <section>
+        <h2>Two modes</h2>
+        <table>
+          <tr><th></th><th><code>sync</code> (default)</th><th><code>queued</code></th></tr>
+          <tr><td>How</td><td>Live model calls, bounded concurrency</td><td>One Anthropic Message Batch</td></tr>
+          <tr><td>Latency</td><td>Minutes for a few hundred labels</td><td>Usually under an hour</td></tr>
+          <tr><td>Token cost</td><td>Standard</td><td><strong>50% of standard</strong></td></tr>
+          <tr><td>Response</td><td>Results in the response body</td><td><code>202</code> + a <code>batch_id</code> to poll</td></tr>
+        </table>
+        <p>Queued fits the peak-season drop: submit 300 labels at 5&nbsp;pm, collect results in the morning
+        at half the cost. Add <code>-F 'mode=queued'</code>, then poll:</p>
+<pre><code>curl {{ base_url }}batch/msgbatch_XXXX</code></pre>
+        <p class="hint">While processing you get a status payload; once ended, the same result shape as
+        sync mode. If the server restarted while the batch was in flight, the poll returns
+        <code>409</code> — resubmit the batch (nothing is persisted server-side by design).</p>
+      </section>
+
+      <section>
+        <h2>Response</h2>
+<pre><code>{
+  "summary": { "total": 3, "passed": 2, "failed": 0, "needs_review": 1, "errored": 0 },
+  "results": [
+    {
+      "file": "tx",
+      "result": {
+        "overall": "warn",          // pass | fail | warn | error
+        "checks": [
+          { "field": "Brand name", "status": "warn",
+            "expected": "TX", "found": "TX Experimental Series ...",
+            "detail": "The application's brand appears within the label text — please confirm by eye." },
+          { "field": "Alcohol content", "status": "skipped", ... },
+          { "field": "Government warning", "status": "pass", ... }
+        ],
+        "extracted": { ... }        // everything the model transcribed
+      }
+    }
+  ]
+}</code></pre>
+        <p class="hint">Overall verdicts: any failing check fails the label; anything unconfirmed
+        (near-miss brand, unverifiable bold header) is <em>needs review</em> for a human;
+        <em>skipped</em> checks never block approval.</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

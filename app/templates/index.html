@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TTB Label Check</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="masthead">
+      <div class="crest" aria-hidden="true">✓</div>
+      <div>
+        <h1>Label Check</h1>
+        <p>Compare a label to its application and confirm the federal warning.</p>
+      </div>
+      <nav class="masthead-nav"><a href="/batch-api">Batch API →</a></nav>
+    </header>
+
+    <main>
+      <form hx-post="/check" hx-target="#result" hx-swap="innerHTML"
+            hx-encoding="multipart/form-data" hx-disabled-elt=".submit">
+
+        <div class="step">
+          <div class="step-head"><span class="step-num">1</span><h2>Upload the label</h2></div>
+          <div class="drop">
+            <label class="file-btn" for="label">Choose image(s)
+              <input type="file" id="label" name="label" accept="image/*" multiple required
+                     onchange="document.getElementById('fname').textContent =
+                       this.files.length === 0 ? 'No file chosen' :
+                       this.files.length === 1 ? this.files[0].name :
+                       this.files.length + ' panels: ' + Array.from(this.files).map(f => f.name).join(', ')">
+            </label>
+            <span class="file-name" id="fname">No file chosen</span>
+          </div>
+          <p class="hint">Photos or scans of the label. If it has several panels (front and back),
+            select them all — they are checked together as one label. Sideways photos are handled automatically.</p>
+        </div>
+
+        <div class="step">
+          <div class="step-head"><span class="step-num">2</span><h2>What does the application say?</h2></div>
+          <label class="field-label" for="brand">Brand name</label>
+          <input class="text-input" type="text" id="brand" name="brand"
+                 placeholder="e.g. Stone's Throw" required>
+          <div style="height:16px"></div>
+          <label class="field-label" for="abv">Alcohol content</label>
+          <div class="abv-row">
+            <input class="text-input" type="text" id="abv" name="abv" inputmode="decimal"
+                   placeholder="13.5">
+            <span class="unit">% ALC/VOL</span>
+          </div>
+          <p class="hint">Leave alcohol content blank if the application doesn't list it.</p>
+        </div>
+
+        <div class="step">
+          <button class="submit" type="submit">Check label</button>
+          <div class="spinner"><span class="dot"></span> Reading the label…</div>
+        </div>
+      </form>
+
+      <section id="result" class="result" aria-live="polite"></section>
+    </main>
+  </div>
+</body>
+</html>

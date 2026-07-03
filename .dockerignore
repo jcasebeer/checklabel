@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+*.tgz
+.git/
+README.md
+sample_manifest.json
+tests/
+scripts/
+docs/
+pytest.ini
+requirements-dev.txt
