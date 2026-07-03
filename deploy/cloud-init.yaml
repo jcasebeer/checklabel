@@ -8,13 +8,30 @@
 # is reached only through the Cloudflare Tunnel (outbound-only), so no web
 # ports are ever opened.
 
+# Key-only SSH, enforced the cloud-init-native way. ssh_pwauth makes
+# cloud-init itself write PasswordAuthentication no; the 00- drop-in below
+# additionally wins over any provider-written sshd_config.d file (sshd uses
+# first-value-wins and includes the directory in lexical order, so editing
+# the main sshd_config with sed is NOT reliable on Ubuntu cloud images).
+ssh_pwauth: false
+disable_root: true
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/00-hardening.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+
 users:
   - name: deploy
     groups: [docker]
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
     ssh_authorized_keys:
-      - ssh-ed25519 AAAA... REPLACE_WITH_YOUR_PUBLIC_KEY
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDATbIpx9T8xaCuaeUW+q6JOEGqpSQYhEpL1VCeXBOmqCFcPIx7J5WAgIhFILNVwptaBrz8G/tjwUtDL6q3OocXx7qvO6ryKkqYzx1glJa9+KbZk8VA7skyUVHXZL78Tjl0xKoArpkhZezl5BAeUzclVi9u4imn7CqZw8Lrns4NaIDRIwDtCSP138vrj2AbijpzPeinRdLYq0ysDAcG2mDVvY6FZhtGd1spazk2iZy2uYjW0tqwzOrFSiZAOPMNceyfzNquKYzw0ijR0n0jf/owvQhUcSf75eZnykp3q1E77A1PFPzeUZJljXLwgdkEnYiPx3RwLaidCwHBlcfU97ddSe64GK3cp+WVbp4FGZsas+x8neu4lW5i9BeQb/0RJlWtZYYDeM0LEubh4/5pynipLme+e9NrNMRPLo/utGvngzGFjI8yZXOx+OJSc8LHI3PqHLnl6rh3Fb5LEyG+RQ4aX2UGoGxgBnHM/yf8gVSJUG7oYpXofDxg4J2vY5nQ4pE= dev@BLIPBLOP9000
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDzPue8GXAX3MG1v29i7y5HSyuSkJ8hKQaa5AnYS3LAB jack@vandalay
 
 package_update: true
 package_upgrade: true
@@ -29,14 +46,12 @@ runcmd:
   - systemctl enable --now docker
   - mkdir -p /opt/label-check
   - chown deploy:deploy /opt/label-check
-  # Firewall: deny everything inbound except SSH. No HTTP/HTTPS ports —
+  # Firewall: deny everything inbound except SSH. No HTTP/HTTPS ports --
   # cloudflared connects outward to Cloudflare.
   - ufw default deny incoming
   - ufw default allow outgoing
   - ufw allow OpenSSH
   - ufw --force enable
-  # Hardening: key-only SSH, no root login.
-  - sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-  - sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+  # Apply the SSH hardening drop-in written above.
   - systemctl restart ssh
   - dpkg-reconfigure -f noninteractive unattended-upgrades
